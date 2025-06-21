@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 Needleman-Wunsch DNA Sequence Alignment Simulator</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f9;
+            --main-color: #2c3e50;
+            --accent-color: #3498db;
+            --green-light: #e8f5e9;
+            --green-dark: #2e7d32;
+            --red-light: #ffebee;
+            --red-dark: #c62828;
+            --blue-light: #e0f7fa;
+            --blue-dark: #007bff;
+            --gray-light: #f5f5f5;
+            --gray-dark: #6c757d;
+            --border-color: #dde1e6;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--main-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            color: var(--main-color);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2.2rem;
+        }
+
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; }
+        .info-icon { display: inline-block; width: 16px; height: 16px; background-color: var(--accent-color); color: white; border-radius: 50%; text-align: center; font-size: 12px; line-height: 16px; margin-left: 8px; cursor: help; position: relative; }
+        .info-icon .tooltip-text-info { visibility: hidden; width: 220px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 10; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; }
+        .info-icon:hover .tooltip-text-info { visibility: visible; opacity: 1; }
+        input[type="text"], input[type="number"] { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; transition: border-color 0.3s, box-shadow 0.3s; }
+        input[type="text"]:focus, input[type="number"]:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 5px rgba(52, 152, 219, 0.5); }
+        .button-group { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        button { padding: 12px 20px; border: none; border-radius: 6px; background-color: var(--accent-color); color: white; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.3s, transform 0.1s; }
+        button:hover { background-color: #2980b9; }
+        button:active { transform: translateY(1px); }
+        button.secondary { background-color: #7f8c8d; }
+        button.secondary:hover { background-color: #6c7a7b; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        .main-content { display: flex; gap: 25px; margin-top: 20px; align-items: flex-start; }
+        #matrix-container { flex-grow: 1; overflow-x: auto; }
+        #matrix-table { border-collapse: collapse; font-size: 0.9em; white-space: nowrap; }
+        #matrix-table th, #matrix-table td { border: 1px solid var(--border-color); padding: 2px; text-align: center; position: relative; transition: background-color 0.3s, outline 0.2s; }
+        #matrix-table th { background-color: #ecf0f1; font-weight: bold; font-size: 1.2rem; }
+        #matrix-table td { font-weight: bold; font-size: 1.1rem; }
+
+        /* --- KEY FIX FOR OVERLAP --- */
+        .cell-content {
+            min-height: 45px;
+            min-width: 50px;
+            display: flex;
+            flex-direction: column; /* Stack vertically */
+            justify-content: center; /* Center the column vertically */
+            align-items: center;     /* Center items horizontally */
+        }
+        .arrow {
+            font-size: 11px; /* Smaller font for arrows */
+            line-height: 1;
+            color: #555;
+            height: 12px; /* Explicit height to create space for arrows */
+            letter-spacing: 2px;
+        }
+        .score {
+            font-weight: bold;
+            font-size: 1.2em;
+            line-height: 1.2;
+        }
+        /* --- END OF FIX --- */
+
+        .start-cell { background-color: var(--green-light); }
+        .path-cell { background-color: var(--red-light); }
+        .path-cell .score { color: var(--red-dark); }
+        .current-cell { outline: 3px solid var(--blue-dark); outline-offset: -2px; background-color: var(--blue-light) !important; }
+
+        #explanation-panel { flex-basis: 380px; flex-shrink: 0; background-color: #fdfdfd; border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; position: sticky; top: 20px; }
+        #explanation-panel h2 { margin-top: 0; font-size: 1.3rem; color: var(--main-color); border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        #explanation-content { min-height: 200px; font-size: 1rem; line-height: 1.6; }
+        .explanation-step { padding-bottom: 12px; border-bottom: 1px dashed #eee; margin-bottom: 12px;}
+        .explanation-step:last-child { border-bottom: none; }
+        .exp-title { font-weight: bold; display: block; margin-bottom: 5px; }
+        .exp-detail { padding-left: 20px; }
+        .text-match { color: var(--green-dark); font-weight: bold; }
+        .text-mismatch { color: var(--red-dark); font-weight: bold; }
+        .text-gap { color: var(--gray-dark); font-weight: bold; }
+        
+        .legend { margin-top: 15px; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.9rem; justify-content: center; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-color { width: 15px; height: 15px; border: 1px solid #ccc; border-radius: 3px; }
+
+        #results { margin-top: 25px; padding: 20px; border: 2px solid var(--accent-color); border-radius: 8px; display: none; background: var(--blue-light);}
+        #results h2 { margin-top: 0; }
+        .final-score { text-align: center; margin-bottom: 20px;}
+        .final-score span { font-size: 1.8rem; font-weight: bold; color: var(--blue-dark); background: white; padding: 5px 15px; border-radius: 8px; border: 1px solid var(--border-color);}
+        
+        #results-alignment { font-family: var(--font-mono); font-size: 1.3rem; line-height: 2.5; text-align: center; }
+        .align-char { display: inline-block; width: 1.5em; text-align: center; border-radius: 4px; padding: 4px 0; }
+        .res-match { background-color: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-dark); }
+        .res-mismatch { background-color: var(--red-light); color: var(--red-dark); border: 1px solid var(--red-dark); }
+        .res-gap { background-color: var(--gray-light); color: var(--gray-dark); border: 1px solid #ccc; }
+        .match-line { display: block; letter-spacing: 0.8em; padding-left: 0.4em;}
+
+        .speed-control { display: flex; align-items: center; gap: 10px; color: #555; grid-column: 1 / -1; margin-top: 10px; }
+        .speed-control label { font-weight: normal; }
+        
+        footer { margin-top: 30px; text-align: center; color: #7f8c8d; font-size: 0.9rem; }
+        
+        @media (max-width: 950px) {
+            .main-content { flex-direction: column; }
+            #explanation-panel { width: calc(100% - 42px); position: static; }
+        }
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container { padding: 15px; }
+            h1 { font-size: 1.8rem; }
+            .controls-grid { grid-template-columns: 1fr; }
+            .align-char { width: 1.2em; font-size: 1.1rem; }
+            .match-line { letter-spacing: 0.5em; padding-left: 0.25em;}
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> DNA Sequence Alignment Simulator By Kabya Ghosh (CSE-69)</h1>
+
+        <!-- Input Controls -->
+        <div class="controls-grid">
+            <div class="control-group">
+                <label for="seq1">Sequence 1</label>
+                <input type="text" id="seq1" value="GATTACA" oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="control-group">
+                <label for="seq2">Sequence 2</label>
+                <input type="text" id="seq2" value="GCATGCU" oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="control-group">
+                <label for="match">Match Score <span class="info-icon">i<span class="tooltip-text-info">Score for identical bases. Usually positive.</span></span></label>
+                <input type="number" id="match" value="1">
+            </div>
+            <div class="control-group">
+                <label for="mismatch">Mismatch Score <span class="info-icon">i<span class="tooltip-text-info">Penalty for different bases. Usually negative.</span></span></label>
+                <input type="number" id="mismatch" value="-1">
+            </div>
+            <div class="control-group">
+                <label for="gap">Gap Penalty <span class="info-icon">i<span class="tooltip-text-info">Penalty for aligning a base to a gap. Usually negative.</span></span></label>
+                <input type="number" id="gap" value="-1">
+            </div>
+            <div class="speed-control">
+                <label for="speed">Animation Speed:</label>
+                <input type="range" id="speed" min="0" max="200" value="70" step="10">
+                <span>Fast</span>
+            </div>
+        </div>
+        <div class="button-group">
+            <button id="computeBtn">Compute Optimal Alignment</button>
+            <button id="clearBtn" class="secondary">Clear All</button>
+            <button id="downloadBtn" class="secondary" disabled>Download Result (.txt)</button>
+        </div>
+
+        <!-- Main Content: Matrix and Explanation Panel -->
+        <div class="main-content">
+            <div id="matrix-container">
+                <table id="matrix-table"></table>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-color" style="background: var(--green-light);"></div> Start Cell</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--red-light);"></div> Optimal Path</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--blue-light); border: 2px solid var(--blue-dark);"></div> Current Cell</div>
+                </div>
+            </div>
+            <div id="explanation-panel">
+                <h2>🔍 What’s Happening Now</h2>
+                <div id="explanation-content">
+                    <p>Enter your sequences and scores, then click 'Compute' to see the alignment process unfold here!</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results">
+            <h2>🎉 Final Alignment Result</h2>
+            <div class="final-score">
+                Final Score: <span id="final-score-display">0</span>
+            </div>
+            <div id="results-alignment"></div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Made by Kabya Ghosh</p>
+    </footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Elements ---
+    const seq1Input = document.getElementById('seq1');
+    const seq2Input = document.getElementById('seq2');
+    const matchInput = document.getElementById('match');
+    const mismatchInput = document.getElementById('mismatch');
+    const gapInput = document.getElementById('gap');
+    const computeBtn = document.getElementById('computeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const speedSlider = document.getElementById('speed');
+    const matrixTable = document.getElementById('matrix-table');
+    const explanationContent = document.getElementById('explanation-content');
+    const resultsDiv = document.getElementById('results');
+    const finalScoreDisplay = document.getElementById('final-score-display');
+    const resultsAlignment = document.getElementById('results-alignment');
+    
+    // --- State Variables ---
+    let isComputing = false;
+    let finalResultText = '';
+    let currentHighlightedCell = null;
+    let stepCounter = 0;
+
+    // --- Event Listeners ---
+    computeBtn.addEventListener('click', runAlignment);
+    clearBtn.addEventListener('click', clearAll);
+    downloadBtn.addEventListener('click', downloadResult);
+    
+    // --- Explanation Panel & Highlighting ---
+    function updateExplanation(htmlContent) { explanationContent.innerHTML = htmlContent; }
+    function clearExplanation() { updateExplanation('<p>Welcome! Enter your sequences and scores, then click \'Compute\' to see the magic of global alignment step by step.</p>'); }
+    
+    function highlightCell(i, j) {
+        if (currentHighlightedCell) currentHighlightedCell.classList.remove('current-cell');
+        const cellElement = document.getElementById(`cell-${i}-${j}`);
+        if (cellElement) {
+            cellElement.classList.add('current-cell');
+            currentHighlightedCell = cellElement;
+        }
+    }
+
+    // --- Core Algorithm ---
+    async function runAlignment() {
+        if (isComputing) return;
+
+        const seq1 = seq1Input.value.trim().toUpperCase();
+        const seq2 = seq2Input.value.trim().toUpperCase();
+        const matchScore = parseInt(matchInput.value);
+        const mismatchScore = parseInt(mismatchInput.value);
+        const gapPenalty = parseInt(gapInput.value);
+
+        if (!seq1 || !seq2) { alert("Please enter both sequences."); return; }
+
+        isComputing = true;
+        toggleControls(false);
+        clearUI();
+        stepCounter = 0;
+        
+        const m = seq1.length; // rows
+        const n = seq2.length; // cols
+        
+        const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(null).map(() => ({ score: 0, directions: [] })));
+        
+        renderMatrix(dp, seq1, seq2);
+        
+        await initializeMatrix(dp, m, n, gapPenalty);
+        await fillMatrix(dp, seq1, seq2, m, n, matchScore, mismatchScore, gapPenalty);
+        if (currentHighlightedCell) currentHighlightedCell.classList.remove('current-cell');
+        
+        const { aligned1, aligned2, finalScore } = await backtrack(dp, seq1, seq2, m, n);
+        finalResultText = `Final Score: ${finalScore}\n\nAlignment:\n${aligned1}\n${aligned2}`;
+
+        updateExplanation(`<div class="explanation-step"><span class="exp-title">🎉 Alignment Complete!</span>The optimal alignment has been found with a total score of <strong>${finalScore}</strong>. See the final result below.</div>`);
+        displayFinalResults(aligned1, aligned2, finalScore);
+
+        isComputing = false;
+        toggleControls(true);
+    }
+    
+    async function initializeMatrix(dp, m, n, gap) {
+        updateExplanation('🟢 <strong>Step 0: Initializing Matrix</strong><br>The first row and column are filled with cumulative gap penalties.');
+        
+        dp[0][0] = { score: 0, directions: ['S'] }; // Start
+        updateCell(0, 0, dp[0][0]);
+        await sleep();
+
+        for (let j = 1; j <= n; j++) { // Top row
+            dp[0][j] = { score: j * gap, directions: ['L'] };
+            highlightCell(0, j);
+            updateCell(0, j, dp[0][j]);
+            await sleep();
+        }
+        for (let i = 1; i <= m; i++) { // First column
+            dp[i][0] = { score: i * gap, directions: ['U'] };
+            highlightCell(i, 0);
+            updateCell(i, 0, dp[i][0]);
+            await sleep();
+        }
+    }
+    
+    async function fillMatrix(dp, seq1, seq2, m, n, match, mismatch, gap) {
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                stepCounter++;
+                highlightCell(i, j);
+                const char1 = seq1[i-1];
+                const char2 = seq2[j-1];
+                const isMatch = char1 === char2;
+                const matchVal = isMatch ? match : mismatch;
+                
+                const diagScore = dp[i-1][j-1].score + matchVal;
+                const upScore = dp[i-1][j].score + gap;
+                const leftScore = dp[i][j-1].score + gap;
+                
+                const maxScore = Math.max(diagScore, upScore, leftScore);
+                
+                const directions = [];
+                if (diagScore === maxScore) directions.push('D');
+                if (upScore === maxScore) directions.push('U');
+                if (leftScore === maxScore) directions.push('L');
+                
+                dp[i][j] = { score: maxScore, directions: directions };
+
+                let explanationHTML = `<div class="explanation-step"><span class="exp-title">Step ${stepCounter}: Cell [${i},${j}]</span>`;
+                explanationHTML += `Comparing '${char1}' vs '${char2}' → ${isMatch ? '<span class="text-match">Match ✅</span>' : '<span class="text-mismatch">Mismatch ❌</span>'}</div>`;
+                explanationHTML += `<div class="explanation-step"><span class="exp-title">Calculating Scores</span><div class="exp-detail">`;
+                explanationHTML += `↖️ Diagonal: ${dp[i-1][j-1].score} + (${matchVal}) = <strong>${diagScore}</strong><br>`;
+                explanationHTML += `↑ Top: ${dp[i-1][j].score} + (${gap}) = <strong>${upScore}</strong><br>`;
+                explanationHTML += `← Left: ${dp[i][j-1].score} + (${gap}) = <strong>${leftScore}</strong></div></div>`;
+                const dirArrows = directions.map(d => ({'D':'↖️', 'U':'↑', 'L':'←'}[d])).join(' ');
+                explanationHTML += `<div class="explanation-step"><span class="exp-title">Result</span>Max score is <strong>${maxScore}</strong>, from: ${dirArrows}`;
+                if (directions.length > 1) {
+                    explanationHTML += `<br><span style="color:var(--blue-dark);">A tie! All paths are equally optimal here.</span>`;
+                }
+                explanationHTML += `</div>`;
+                
+                updateExplanation(explanationHTML);
+                updateCell(i, j, dp[i][j]);
+                await sleep();
+            }
+        }
+    }
+    
+    async function backtrack(dp, seq1, seq2, m, n) {
+        updateExplanation('🔄 <strong>Backtracking...</strong><br>Following one optimal path (marked in red) from the end to the start. In case of a tie, the choice is ↖️ > ↑ > ←.');
+        await sleep(getDelay() * 2);
+
+        let aligned1 = "", aligned2 = "";
+        let i = m, j = n;
+
+        while (i > 0 || j > 0) {
+            highlightCell(i, j);
+            const cell = dp[i][j];
+            cell.isPath = true;
+            updateCell(i, j, cell);
+            
+            const dirs = cell.directions;
+            
+            if (dirs.includes('D') && i > 0 && j > 0) {
+                aligned1 = seq1[i-1] + aligned1;
+                aligned2 = seq2[j-1] + aligned2;
+                i--; j--;
+            } else if (dirs.includes('U') && i > 0) {
+                aligned1 = seq1[i-1] + aligned1;
+                aligned2 = '-' + aligned2;
+                i--;
+            } else { 
+                aligned1 = '-' + aligned1;
+                aligned2 = seq2[j-1] + aligned2;
+                j--;
+            }
+            await sleep();
+        }
+        dp[0][0].isPath = true;
+        updateCell(0,0, dp[0][0]);
+        if (currentHighlightedCell) currentHighlightedCell.classList.remove('current-cell');
+        
+        return { aligned1, aligned2, finalScore: dp[m][n].score };
+    }
+
+    // --- UI Rendering ---
+    function renderMatrix(dp, seq1, seq2) {
+        matrixTable.innerHTML = '';
+        const m = seq1.length, n = seq2.length;
+        
+        let header = `<thead><tr><th></th><th>-</th>${[...seq2].map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
+        matrixTable.innerHTML += header;
+
+        let body = '<tbody>';
+        for (let i = 0; i <= m; i++) {
+            let row = `<tr><th>${i === 0 ? '-' : seq1[i-1]}</th>`;
+            for (let j = 0; j <= n; j++) {
+                row += `<td id="cell-${i}-${j}">${createCellContent(dp[i][j] || {score:'', directions:[]})}</td>`;
+            }
+            body += row + '</tr>';
+        }
+        matrixTable.innerHTML += body + '</tbody>';
+        document.getElementById('cell-0-0').classList.add('start-cell');
+    }
+
+    function updateCell(i, j, cellData) {
+        const cellElement = document.getElementById(`cell-${i}-${j}`);
+        if (cellElement) {
+            cellElement.innerHTML = createCellContent(cellData);
+            if (cellData.isPath) cellElement.classList.add('path-cell');
+        }
+    }
+
+    // --- UPDATED createCellContent FUNCTION ---
+    function createCellContent(cell) {
+        const arrows = cell.directions.map(d => ({'D':'↖', 'U':'↑', 'L':'←', 'S':''}[d])).join('');
+        // Use divs for stacking. Add a non-breaking space to empty arrow divs to maintain layout consistency.
+        return `<div class="cell-content">
+                    <div class="arrow">${arrows || ' '}</div>
+                    <div class="score">${cell.score}</div>
+                </div>`;
+    }
+    
+    function displayFinalResults(aligned1, aligned2, score) {
+        resultsDiv.style.display = 'block';
+        finalScoreDisplay.textContent = score;
+
+        let align1HTML = '', align2HTML = '', matchLine = '';
+
+        for (let i = 0; i < aligned1.length; i++) {
+            const c1 = aligned1[i], c2 = aligned2[i];
+            if (c1 === '-' || c2 === '-') {
+                align1HTML += `<span class="align-char res-gap">${c1}</span>`;
+                align2HTML += `<span class="align-char res-gap">${c2}</span>`;
+                matchLine += ` `;
+            } else if (c1 === c2) {
+                align1HTML += `<span class="align-char res-match">${c1}</span>`;
+                align2HTML += `<span class="align-char res-match">${c2}</span>`;
+                matchLine += `|`;
+            } else {
+                align1HTML += `<span class="align-char res-mismatch">${c1}</span>`;
+                align2HTML += `<span class="align-char res-mismatch">${c2}</span>`;
+                matchLine += ` `;
+            }
+        }
+        
+        resultsAlignment.innerHTML = `<div>${align1HTML}</div><div class="match-line">${matchLine}</div><div>${align2HTML}</div>`;
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    
+    // --- Utility Functions ---
+    function clearUI() {
+        matrixTable.innerHTML = '';
+        resultsDiv.style.display = 'none';
+        if (currentHighlightedCell) {
+            currentHighlightedCell.classList.remove('current-cell');
+            currentHighlightedCell = null;
+        }
+    }
+    
+    function clearAll() {
+        if (isComputing) return;
+        clearUI();
+        clearExplanation();
+        downloadBtn.disabled = true;
+        finalResultText = '';
+    }
+
+    function toggleControls(enable) {
+        [computeBtn, clearBtn, seq1Input, seq2Input, matchInput, mismatchInput, gapInput, speedSlider].forEach(el => el.disabled = !enable);
+        downloadBtn.disabled = !enable || !finalResultText;
+    }
+
+    function getDelay() { return (200 - speedSlider.value) * 1.5; }
+    function sleep() {
+        const speed = getDelay();
+        if (speed <= 0) return Promise.resolve();
+        return new Promise(resolve => setTimeout(resolve, speed));
+    }
+    
+    function downloadResult() {
+        if (!finalResultText) return;
+        const blob = new Blob([finalResultText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'alignment_result.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+});
+</script>
+</body>
+</html>
